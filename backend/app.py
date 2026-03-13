@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 # Import the model
-from model import CLPPModel, FEATURE_NAMES
+from backend.model import CLPPModel, FEATURE_NAMES
 
 # Initialize FastAPI app
 app = FastAPI(
