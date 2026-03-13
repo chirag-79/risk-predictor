@@ -130,28 +130,43 @@ class ErrorResponse(BaseModel):
 # ============================================================================
 
 @app.on_event("startup")
-async def startup_event():
+def startup_event():
     """Load model on startup"""
     global model
     print("🚀 Starting CLPP Risk Prediction API...")
     
     try:
-        model = CLPPModel()
+        # Get the backend directory
         backend_dir = Path(__file__).parent
+        print(f"Backend directory: {backend_dir}")
+        
+        # Initialize model with explicit paths
         model_path = backend_dir / 'trained_model.pkl'
         scaler_path = backend_dir / 'scaler.pkl'
         
-        model.model_path = str(model_path)
-        model.scaler_path = str(scaler_path)
+        print(f"Looking for model at: {model_path}")
+        print(f"Looking for scaler at: {scaler_path}")
+        print(f"Model exists: {model_path.exists()}")
+        print(f"Scaler exists: {scaler_path.exists()}")
+        
+        model = CLPPModel(model_path=str(model_path), scaler_path=str(scaler_path))
         
         # Try to load existing model
         if model.load_model():
             print("✅ Model loaded successfully from disk")
         else:
-            print("⚠️  Pre-trained model not found. Please train the model first.")
-            print("   Run: python model.py")
+            print("⚠️  Pre-trained model not found. Training model now...")
+            csv_path = backend_dir.parent / 'Patient_data.csv'
+            print(f"Training from: {csv_path}")
+            if csv_path.exists():
+                model.train(str(csv_path))
+                print("✅ Model trained successfully")
+            else:
+                print(f"❌ CSV file not found at {csv_path}")
     except Exception as e:
-        print(f"❌ Error loading model: {str(e)}")
+        import traceback
+        print(f"❌ Error during startup: {str(e)}")
+        print(traceback.format_exc())
 
 
 @app.on_event("shutdown")
