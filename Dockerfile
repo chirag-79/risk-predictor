@@ -13,8 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy entire project
 COPY . .
 
-# Train model on startup (this is run once)
-RUN cd /app && python backend/model.py
+# Train model on startup (this creates the .pkl files in backend/)
+RUN cd /app/backend && python model.py
 
 # Run FastAPI
 CMD exec uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}
