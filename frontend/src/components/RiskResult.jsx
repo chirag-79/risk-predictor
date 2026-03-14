@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle, TrendingUp, MessageCircle } from 'lucide-re
 const RiskResult = ({ result, onReset }) => {
   if (!result) return null
 
-  const { risk_probability, risk_percentage, risk_classification, recommendation } = result
+  const { risk_probability, risk_percentage, risk_classification, threshold, recommendation } = result
   const isHighRisk = risk_classification === 'HIGH RISK'
 
   return (
@@ -40,7 +40,7 @@ const RiskResult = ({ result, onReset }) => {
 
         {/* Risk Probability */}
         <div className="mb-8">
-          <p className="text-sm text-gray-600 mb-3">Risk Probability</p>
+          <p className="text-sm text-gray-600 mb-3">Risk Percentage</p>
           
           {/* Circular Progress */}
           <div className="flex items-center gap-6">
@@ -73,7 +73,7 @@ const RiskResult = ({ result, onReset }) => {
                 }`}>
                   {risk_percentage.toFixed(1)}%
                 </span>
-                <span className="text-xs text-gray-500">Risk Level</span>
+                <span className="text-xs text-gray-500">Risk</span>
               </div>
             </div>
 
@@ -85,9 +85,12 @@ const RiskResult = ({ result, onReset }) => {
                   {risk_probability.toFixed(4)}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">
-                  {risk_probability > 0.5
-                    ? 'Score indicates HIGH RISK (> 0.5)'
-                    : 'Score indicates LOW RISK (≤ 0.5)'}
+                  Threshold: <span className="font-bold">{threshold.toFixed(4)}</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {risk_probability >= threshold
+                    ? `${risk_percentage.toFixed(1)}% ≥ ${(threshold*100).toFixed(1)}% (HIGH)`
+                    : `${risk_percentage.toFixed(1)}% < ${(threshold*100).toFixed(1)}% (LOW)`}
                 </p>
               </div>
             </div>
@@ -112,22 +115,35 @@ const RiskResult = ({ result, onReset }) => {
           <p className="text-sm text-gray-600 mb-3">Risk Scale</p>
           <div className="bg-white p-4 rounded-lg border border-gray-200">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-semibold text-green-600">Low Risk</span>
-              <span className="text-xs font-semibold text-red-600">High Risk</span>
+              <span className="text-xs font-semibold text-green-600">Low Risk (0%)</span>
+              <span className="text-xs font-semibold text-red-600">High Risk (100%)</span>
             </div>
             <div className="w-full h-8 bg-gradient-to-r from-green-500 to-red-500 rounded-lg relative">
+              {/* Threshold line */}
+              <div
+                className="h-full w-1 bg-blue-700 rounded-full absolute"
+                style={{
+                  left: `${threshold * 100}%`,
+                  transform: 'translateX(-50%)',
+                  height: '120%',
+                  top: '-10%'
+                }}
+                title={`Threshold: ${(threshold*100).toFixed(1)}%`}
+              />
+              {/* Current risk pointer */}
               <div
                 className="h-full w-1 bg-black rounded-full absolute"
                 style={{
                   left: `${risk_probability * 100}%`,
                   transform: 'translateX(-50%)',
                 }}
+                title={`Your Risk: ${risk_percentage.toFixed(1)}%`}
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-gray-500">
-              <span>0.0</span>
-              <span>0.5 (Threshold)</span>
-              <span>1.0</span>
+              <span>0%</span>
+              <span className="text-blue-600 font-bold">{(threshold*100).toFixed(1)}% Threshold</span>
+              <span>100%</span>
             </div>
           </div>
         </div>
@@ -137,8 +153,9 @@ const RiskResult = ({ result, onReset }) => {
           <p className="text-sm text-blue-900 leading-relaxed">
             <strong>Note:</strong> This assessment is based on seven key clinical parameters
             and uses a Logistic Regression model trained on research data from 2,400 participants.
-            The score above 0.5 indicates HIGH RISK for Chronic Lumbopelvic Pain. Always consult
-            with a healthcare professional for final diagnosis and treatment planning.
+            The threshold ({(threshold*100).toFixed(1)}%) is optimized based on clinical data. 
+            Scores above this threshold indicate HIGH RISK for Chronic Lumbopelvic Pain. 
+            Always consult with a healthcare professional for final diagnosis and treatment planning.
           </p>
         </div>
       </div>

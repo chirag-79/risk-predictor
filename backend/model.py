@@ -47,11 +47,13 @@ FEATURE_NAMES = [
 class CLPPModel:
     """Logistic Regression model for CLPP risk prediction"""
     
-    def __init__(self, model_path='trained_model.pkl', scaler_path='scaler.pkl'):
+    def __init__(self, model_path='trained_model.pkl', scaler_path='scaler.pkl', threshold_path='threshold.pkl'):
         self.model_path = model_path
         self.scaler_path = scaler_path
+        self.threshold_path = threshold_path
         self.model = None
         self.scaler = None
+        self.threshold = 0.5  # Default threshold
         self.feature_names = FEATURE_NAMES
         
     def load_and_preprocess_data(self, csv_path):
@@ -112,18 +114,46 @@ class CLPPModel:
         return self.model
     
     def evaluate(self, X_test, y_test):
-        """Evaluate model on test set"""
+        """Evaluate model on test set and find optimal threshold"""
         print("\nEvaluating Model on Test Set...")
         
         X_test_scaled = self.scaler.transform(X_test)
-        y_pred = self.model.predict(X_test_scaled)
         y_pred_proba = self.model.predict_proba(X_test_scaled)[:, 1]
+        
+        # Find optimal threshold using Youden's Index (Sensitivity + Specificity - 1)
+        thresholds = np.arange(0.1, 1.0, 0.01)
+        best_threshold = 0.5
+        best_youden = 0
+        
+        print("\nCalculating optimal threshold...")
+        for thresh in thresholds:
+            y_pred_thresh = (y_pred_proba >= thresh).astype(int)
+            
+            # Calculate sensitivity (recall) and specificity
+            tn = ((y_test == 0) & (y_pred_thresh == 0)).sum()
+            fp = ((y_test == 0) & (y_pred_thresh == 1)).sum()
+            fn = ((y_test == 1) & (y_pred_thresh == 0)).sum()
+            tp = ((y_test == 1) & (y_pred_thresh == 1)).sum()
+            
+            sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+            youden = sensitivity + specificity - 1
+            
+            if youden > best_youden:
+                best_youden = youden
+                best_threshold = thresh
+        
+        self.threshold = best_threshold
+        print(f"\n✅ Optimal Threshold: {best_threshold:.4f} (Youden's Index: {best_youden:.4f})")
+        
+        # Evaluate with optimal threshold
+        y_pred = (y_pred_proba >= self.threshold).astype(int)
         
         # Calculate metrics
         accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred, zero_division=0)
+        recall = recall_score(y_test, y_pred, zero_division=0)
+        f1 = f1_score(y_test, y_pred, zero_division=0)
         roc_auc = roc_auc_score(y_test, y_pred_proba)
         
         print(f"\nAccuracy:  {accuracy:.4f}")
@@ -138,7 +168,8 @@ class CLPPModel:
         
         print("\nClassification Report:")
         print(classification_report(y_test, y_pred, 
-                                  target_names=['Low Risk', 'High Risk']))
+                                  target_names=['Low Risk', 'High Risk'],
+                                  zero_division=0))
         
         return {
             'accuracy': accuracy,
@@ -146,29 +177,36 @@ class CLPPModel:
             'recall': recall,
             'f1': f1,
             'roc_auc': roc_auc,
-            'confusion_matrix': cm
+            'confusion_matrix': cm,
+            'threshold': self.threshold
         }
     
     def save_model(self):
-        """Save trained model and scaler"""
+        """Save trained model, scaler, and threshold"""
         print(f"\nSaving model to {self.model_path}...")
         joblib.dump(self.model, self.model_path)
         joblib.dump(self.scaler, self.scaler_path)
-        print("Model saved successfully!")
+        joblib.dump(self.threshold, self.threshold_path)
+        print(f"Model saved successfully!")
+        print(f"Threshold: {self.threshold:.4f}")
     
     def load_model(self):
-        """Load pre-trained model and scaler"""
-        if os.path.exists(self.model_path) and os.path.exists(self.scaler_path):
+        """Load pre-trained model, scaler, and threshold"""
+        if (os.path.exists(self.model_path) and 
+            os.path.exists(self.scaler_path) and
+            os.path.exists(self.threshold_path)):
             print(f"Loading model from {self.model_path}...")
             self.model = joblib.load(self.model_path)
             self.scaler = joblib.load(self.scaler_path)
-            print("Model loaded successfully!")
+            self.threshold = joblib.load(self.threshold_path)
+            print(f"Model loaded successfully!")
+            print(f"Using threshold: {self.threshold:.4f}")
             return True
         return False
     
     def predict(self, features_dict):
         """
-        Make prediction for a single patient
+        Make prediction for a single patient using optimized threshold
         
         Args:
             features_dict: Dictionary with patient data
@@ -185,7 +223,9 @@ class CLPPModel:
         Returns:
             dict: {
                 'risk_probability': float (0.0-1.0),
+                'risk_percentage': float (0-100),
                 'risk_classification': str ('HIGH RISK' or 'LOW RISK'),
+                'threshold': float,
                 'recommendation': str
             }
         """
@@ -199,19 +239,20 @@ class CLPPModel:
         # Get probability
         probability = self.model.predict_proba(features_scaled)[0, 1]
         
-        # Classify
-        classification = 'HIGH RISK' if probability > 0.5 else 'LOW RISK'
+        # Classify using optimized threshold
+        classification = 'HIGH RISK' if probability >= self.threshold else 'LOW RISK'
         
-        # Recommendation
-        if probability > 0.5:
-            recommendation = "Patient is at HIGH RISK for CLPP. Schedule consultation with clinician for detailed assessment and intervention planning."
+        # Recommendation based on risk level
+        if probability >= self.threshold:
+            recommendation = f"Patient is at HIGH RISK ({probability*100:.1f}%) for CLPP. Schedule consultation with clinician for detailed assessment and intervention planning."
         else:
-            recommendation = "Patient is at LOW RISK for CLPP. Continue monitoring and encourage preventive lifestyle modifications."
+            recommendation = f"Patient is at LOW RISK ({probability*100:.1f}%) for CLPP. Continue monitoring and encourage preventive lifestyle modifications."
         
         return {
             'risk_probability': float(probability),
             'risk_percentage': float(probability * 100),
             'risk_classification': classification,
+            'threshold': float(self.threshold),
             'recommendation': recommendation
         }
 

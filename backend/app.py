@@ -107,6 +107,9 @@ class PredictionResult(BaseModel):
     risk_classification: str = Field(
         description="Classification: 'HIGH RISK' or 'LOW RISK'"
     )
+    threshold: float = Field(
+        description="Threshold used for classification"
+    )
     recommendation: str = Field(
         description="Clinical recommendation based on risk level"
     )
