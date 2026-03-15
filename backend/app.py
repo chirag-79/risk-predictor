@@ -137,6 +137,7 @@ def startup_event():
     """Load model on startup"""
     global model
     print("🚀 Starting CLPP Risk Prediction API...")
+    print("📊 Using Logistic Regression Model with Clinical Thresholds")
     
     try:
         # Get the backend directory
@@ -145,24 +146,36 @@ def startup_event():
         
         # Initialize model with explicit paths
         model_path = backend_dir / 'trained_model.pkl'
-        scaler_path = backend_dir / 'scaler.pkl'
+        threshold_path = backend_dir / 'threshold.pkl'
         
         print(f"Looking for model at: {model_path}")
-        print(f"Looking for scaler at: {scaler_path}")
+        print(f"Looking for threshold at: {threshold_path}")
         print(f"Model exists: {model_path.exists()}")
-        print(f"Scaler exists: {scaler_path.exists()}")
+        print(f"Threshold exists: {threshold_path.exists()}")
         
-        model = CLPPModel(model_path=str(model_path), scaler_path=str(scaler_path))
+        model = CLPPModel(
+            model_path=str(model_path),
+            scaler_path=str(backend_dir / 'scaler.pkl'),  # Kept for compatibility
+            threshold_path=str(threshold_path)
+        )
         
         # Try to load existing model
         if model.load_model():
             print("✅ Model loaded successfully from disk")
+            print(f"✅ Using threshold: {model.threshold:.4f}")
         else:
             print("⚠️  Pre-trained model not found. Training model now...")
             csv_path = backend_dir.parent / 'Patient_data.csv'
             print(f"Training from: {csv_path}")
             if csv_path.exists():
-                model.train(str(csv_path))
+                X_continuous, X_binary, y = model.load_and_preprocess_data(str(csv_path))
+                from sklearn.model_selection import train_test_split
+                X_train_cont, X_test_cont, X_train_binary, X_test_binary, y_train, y_test = train_test_split(
+                    X_continuous, X_binary, y, test_size=0.2, random_state=42, stratify=y
+                )
+                model.train(X_train_cont, X_train_binary, y_train)
+                model.evaluate(X_test_binary, y_test)
+                model.save_model()
                 print("✅ Model trained successfully")
             else:
                 print(f"❌ CSV file not found at {csv_path}")
